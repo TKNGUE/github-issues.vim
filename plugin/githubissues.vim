@@ -16,20 +16,25 @@ endif
 let g:github_issues_loaded = 1
 
 " do not continue if Vim is not compiled with Python2.7 support
-if !has("python")
-  echo "github-issues.vim requires Python support, sorry :c"
-  finish
+if !has("python") && !has("python3")
+	echo "github-issues.vim requires Python support, sorry :c"
+	finish
+endif
+
+if has("python")
+	command! -nargs=1 Python2or3 python <args>
+else
+	command! -nargs=1 Python2or3 python3 <args>
 endif
 
 function! s:showGithubMilestones(...)
   call ghissues#init()
 
   if a:0 <1
-    python showMilestoneList(0, "True")
+    Python2or3 showMilestoneList(0, "True")
   else
-    python showMilestoneList(vim.eval("a:1"), "True")
+    Python2or3 showMilestoneList(vim.eval("a:1"), "True")
   endif
-
   set buftype=nofile
   nnoremap <buffer> q :q<cr>
   nnoremap <buffer> <cr> :normal! 0<cr>:call <SID>setMilestone(getline("."))<cr>
@@ -41,9 +46,9 @@ function! s:showGithubIssues(...)
 
   let github_failed = 0
   if a:0 < 1
-    python showIssueList(0, "True")
+    Python2or3 showIssueList(0, "True")
   else
-    python showIssueList(vim.eval("a:1"), "True")
+    Python2or3 showIssueList(vim.eval("a:1"), "True")
   endif
 
   if github_failed == "1"
@@ -61,7 +66,7 @@ endfunction
 
 function! s:showSearchList()
   call ghissues#init()
-  python showSearchList()
+  Python2or3 showSearchList()
 
   " its not a real file
   set buftype=nofile
@@ -74,11 +79,11 @@ endfunction
 function! s:showIssueLink(...)
   call ghissues#init()
   if a:0 > 2
-    python showIssueLink(vim.eval("a:1"), vim.eval("a:2"), vim.eval("a:3"))
+    Python2or3 showIssueLink(vim.eval("a:1"), vim.eval("a:2"), vim.eval("a:3"))
   elseif a:0 > 1
-    python showIssueLink(vim.eval("a:1"), vim.eval("a:2"))
+    Python2or3 showIssueLink(vim.eval("a:1"), vim.eval("a:2"))
   else
-    python showIssueLink(vim.eval("a:1"))
+    Python2or3 showIssueLink(vim.eval("a:1"))
   endif
 endfunction
 
@@ -86,11 +91,11 @@ function! s:showIssue(...)
   call ghissues#init()
 
   if a:0 > 2
-    python showIssueBuffer(vim.eval("a:1"), vim.eval("a:2"), vim.eval("a:3"))
+    Python2or3 showIssueBuffer(vim.eval("a:1"), vim.eval("a:2"), vim.eval("a:3"))
   elseif a:0 > 1
-    python showIssueBuffer(vim.eval("a:1"), vim.eval("a:2"))
+    Python2or3 showIssueBuffer(vim.eval("a:1"), vim.eval("a:2"))
   else
-    python showIssueBuffer(vim.eval("a:1"))
+    Python2or3 showIssueBuffer(vim.eval("a:1"))
   endif
 
 
@@ -107,7 +112,7 @@ endfunction
 function! s:showThisIssue(...)
   call ghissues#init()
 
-  python curUri = getRepoURI()
+  Python2or3 curUri = getRepoURI()
 
   silent tabe
   set buftype=nofile
@@ -116,9 +121,9 @@ function! s:showThisIssue(...)
   if a:0 > 1
     let name = "gissues/" . a:2 . "/" . a:1
     execute 'edit' name
-    python showIssue(vim.eval("a:1"),vim.eval("a:2"))
+    Python2or3 showIssue(vim.eval("a:1"),vim.eval("a:2"))
   else
-    python <<EOF
+    Python2or3 <<EOF
 name = "gissues/" + curUri + "/" + vim.eval("a:1")
 vim.command("edit " + name)
 showIssue(vim.eval("a:1"), curUri)
@@ -133,7 +138,7 @@ EOF
 endfunction
 
 function! s:setIssueState(state)
-  python setIssueData({ 'state': 'open' if vim.eval("a:state") == '1' else 'closed' })
+  Python2or3 setIssueData({ 'state': 'open' if vim.eval("a:state") == '1' else 'closed' })
 endfunction
 
 function! s:browse()
@@ -146,13 +151,13 @@ endfunction
 
 function! s:updateIssue()
   call ghissues#init()
-  python showIssue()
+  Python2or3 showIssue()
   silent execute 'doautocmd BufReadPost '.expand('%:p')
 endfunction
 
 function! s:saveIssue()
   call ghissues#init()
-  python saveGissue()
+  Python2or3 saveGissue()
   silent execute 'doautocmd BufWritePost '.expand('%:p')
 endfunction
 
@@ -160,7 +165,7 @@ endfunction
 function! githubissues#CompleteIssues(findstart, base)
   if g:gissues_lazy_load
     if !b:did_init_omnicomplete
-      python populateOmniComplete()
+      Python2or3 populateOmniComplete()
       let b:did_init_omnicomplete = 1
     endif
   endif
@@ -168,7 +173,7 @@ function! githubissues#CompleteIssues(findstart, base)
   if g:gissues_async_omni && len(b:omni_options) < 1
     if !b:did_init_omnicomplete_async
       let b:did_init_omnicomplete_async = 1
-      python doPopulateOmniComplete()
+      Python2or3 doPopulateOmniComplete()
     endif
   endif
 
@@ -217,9 +222,9 @@ function! s:setupOmni()
   let b:omni_options = []
 
   if !g:gissues_lazy_load
-    python populateOmniComplete()
+    Python2or3 populateOmniComplete()
     if !g:gissues_async_omni
-      python doPopulateOmniComplete()
+      Python2or3 doPopulateOmniComplete()
     endif
   else
     let b:did_init_omnicomplete = 0
@@ -239,6 +244,7 @@ function! s:setMilestone(title)
 
   let g:github_current_milestone = title
 
+	Python2or3 populateOmniComplete()
 endfunction
 
 function! s:commitHighlighting()
