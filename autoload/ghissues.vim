@@ -136,7 +136,7 @@ def getUpstreamRepoURI():
 def showCommits(split = False):
   number = vim.eval("b:ghissue_number")
   repourl = vim.eval("b:ghissue_repourl")
-  url = ghUrl("/pulls/" + number + "/commits", repourl)
+  url = ghUrl(repourl + "/pulls/" + number + "/commits" )
   response = urllib2.urlopen(url, timeout = 2)
   commits = json.loads(response.read())
   buffer_name = "commits/"+ repourl+"/"+number
@@ -154,7 +154,7 @@ def showCommits(split = False):
 
 def showCommit(sha, split = False):
   repourl = vim.eval("b:ghissue_repourl")
-  url = ghUrl("/commits/" + sha, repourl)
+  url = ghUrl(repourl + "/commits/" + sha)
   headers = { "Accept" : "application/vnd.github.patch" }
   req = urllib2.Request(url,None,headers)
   diff = urllib2.urlopen(req, timeout = 2)
@@ -170,7 +170,7 @@ def showCommit(sha, split = False):
 def showFilesChanged(split = False):
   number = vim.eval("b:ghissue_number")
   repourl = vim.eval("b:ghissue_repourl")
-  url = ghUrl("/pulls/" + number, repourl)
+  url = ghUrl(repourl + "/pulls/" + number)
   headers = { "Accept" : "application/vnd.github.diff" }
   req = urllib2.Request(url,None,headers)
   diff = urllib2.urlopen(req, timeout = 2)
@@ -285,7 +285,7 @@ def getIssueList(repourl, query, ignore_cache = False, only_me = False):
   if only_me:
     params["assignee"] = getCurrentUser()
 
-  return getGHList(ignore_cache, repourl, "/issues", params)
+  return getGHList(ignore_cache, repourl + "/issues", params)
 
 def getCurrentUser():
   return ghApi("", "user", True, False)["login"]
@@ -297,23 +297,22 @@ def getMilestoneList(repourl, query = "", ignore_cache = False):
   # TODO Add support for 'state', 'sort', 'direction'
   params = {}
 
-  return getGHList(ignore_cache, repourl, "/milestones", params)
+  return getGHList(ignore_cache, repourl + "/milestones", params)
 
-def getGHList(ignore_cache, repourl, endpoint, params):
+def getGHList(ignore_cache, endpoint, params):
   global cache_count, github_datacache
 
   # Maybe initialise
-  if github_datacache.get(repourl, '') == '' or len(github_datacache[repourl]) < 1:
-    github_datacache[repourl] = {}
+  if github_datacache.get(endpoint, '') == '' or len(github_datacache[endpoint]) < 1:
+    github_datacache[endpoint] = {}
 
   if (ignore_cache or
-      github_datacache[repourl].get(endpoint,'') == '' or
-      len(github_datacache[repourl].get(endpoint,'')) < 1 or
-      time.time() - github_datacache[repourl][endpoint][0]["cachetime"] > 60):
+      len(github_datacache[endpoint]) < 1 or
+      time.time() - github_datacache[endpoint][0]["cachetime"] > 60):
 
     # load the github API. github_repo looks like "jaxbot/github-issues.vim", for ex.
     try:
-      github_datacache[repourl][endpoint] = []
+      github_datacache[endpoint] = []
       more_to_load = True
 
       page = 1
@@ -323,27 +322,27 @@ def getGHList(ignore_cache, repourl, endpoint, params):
 
         # TODO This should be in ghUrl() I think
         qs = string.join([ k+'='+v for ( k, v ) in params.items()], '&')
-        url = ghUrl(endpoint+'?'+qs, repourl)
+        url = ghUrl(endpoint+'?'+qs)
 
         response = urllib2.urlopen(url, timeout = 2)
         issuearray = json.loads(response.read())
 
         # JSON parse the API response, add page to previous pages if any
-        github_datacache[repourl][endpoint] += issuearray
+        github_datacache[endpoint] += issuearray
 
         more_to_load = len(issuearray) == 30
 
         page += 1
 
     except urllib2.URLError as e:
-      github_datacache[repourl][endpoint] = []
+      github_datacache[endpoint] = []
       if "code" in e and e.code == 404:
         print("github-issues.vim: Error: Do you have a github_access_token defined?")
 
-    if len(github_datacache[repourl][endpoint]) > 0:
-      github_datacache[repourl][endpoint][0]["cachetime"] = time.time()
+    if len(github_datacache[endpoint]) > 0:
+      github_datacache[endpoint][0]["cachetime"] = time.time()
 
-  return github_datacache[repourl][endpoint]
+  return github_datacache[endpoint]
 
 # populate the omnicomplete synchronously or asynchronously, depending on mode
 def populateOmniComplete():
@@ -476,10 +475,10 @@ def showIssue(number=False, repourl=False):
       'labels': []
     }
   else:
-    url = ghUrl("/issues/" + number, repourl)
+    url = ghUrl(repourl + "/issues/" + number)
     issue = json.loads(urllib2.urlopen(url, timeout = 2).read())
     if "pull_request" in issue:
-      pull_request_url = ghUrl("/pulls/" + number, repourl)
+      pull_request_url = ghUrl(repourl + "/pulls/" + number)
       pull_request = json.loads(urllib2.urlopen(pull_request_url, timeout = 2).read())
     vim.command("let b:ghissue_url=\""+issue["html_url"]+"\"")
     vim.command("let b:ghissue_number="+number)
@@ -518,11 +517,11 @@ def showIssue(number=False, repourl=False):
   if number != "new":
     b.append("## Comments")
 
-    url = ghUrl("/issues/" + number + "/comments", repourl)
+    url = ghUrl(repourl + "/issues/" + number + "/comments")
     data = urllib2.urlopen(url, timeout = 2).read()
     comments = json.loads(data)
 
-    url = ghUrl("/issues/" + number + "/events", repourl)
+    url = ghUrl(repourl + "/issues/" + number + "/events")
     data = urllib2.urlopen(url, timeout = 2).read()
     events = json.loads(data)
 
@@ -649,6 +648,7 @@ def saveGissue():
 
   # remove blank entries
   issue['labels'] = filter(bool, issue['labels'])
+  repourl = getUpstreamRepoURI()
 
   if number == "new":
 
@@ -661,7 +661,7 @@ def saveGissue():
 
     data = ""
     try:
-      url = ghUrl("/issues")
+      url = ghUrl(repourl + "/issues")
       request = urllib2.Request(url, json.dumps(issue))
       data = json.loads(urllib2.urlopen(request, timeout = 2).read())
       parens[2] = str(data['number'])
@@ -676,7 +676,7 @@ def saveGissue():
         print(url)
         print(issue)
   else:
-    url = ghUrl("/issues/" + number)
+    url = ghUrl(repourl + "/issues/" + number)
     request = urllib2.Request(url, json.dumps(issue))
     request.get_method = lambda: 'PATCH'
     try:
@@ -687,7 +687,7 @@ def saveGissue():
 
   if commentmode == 3:
     try:
-      url = ghUrl("/issues/" + parens[2] + "/comments")
+      url = ghUrl(repourl + "/issues/" + parens[2] + "/comments")
       data = json.dumps({ 'body': comment })
       request = urllib2.Request(url, data)
       urllib2.urlopen(request, timeout = 2)
@@ -704,7 +704,7 @@ def saveGissue():
 # updates an issues data, such as opening/closing
 def setIssueData(issue):
   parens = getFilenameParens()
-  url = ghUrl("/issues/" + parens[2])
+  url = ghUrl(getUpstreamRepoURI() + "/issues/" + parens[2])
   request = urllib2.Request(url, json.dumps(issue))
   request.get_method = lambda: 'PATCH'
   urllib2.urlopen(request, timeout = 2)
@@ -761,7 +761,7 @@ def ghApi(endpoint, repourl = False, cache = True, repo = True):
       print("SSL appears to be disabled or not installed on this machine. Please reinstall Python and/or Vim.")
 
   try:
-    req = urllib2.urlopen(ghUrl(endpoint, repourl, repo), timeout = 5)
+    req = urllib2.urlopen(ghUrl(repourl + endpoint, repo), timeout = 5)
     data = json.loads(req.read())
 
     api_cache[repourl + "/" + endpoint] = data
@@ -774,7 +774,7 @@ def ghApi(endpoint, repourl = False, cache = True, repo = True):
     return None
 
 # generates a github URL, including access token
-def ghUrl(endpoint, repourl = False, repo = True):
+def ghUrl(endpoint, repo = True):
   params = ""
   token = vim.eval("g:github_access_token")
   if token:
@@ -783,13 +783,11 @@ def ghUrl(endpoint, repourl = False, repo = True):
     else:
       params = "?"
     params += "access_token=" + token
-  if not repourl:
-    repourl = getUpstreamRepoURI()
 
   if repo:
-    repourl = "repos/" + repourl
+    endpoint = "repos/" + endpoint
 
-  return vim.eval("g:github_api_url") + urllib2.quote(repourl) + endpoint + params
+  return vim.eval("g:github_api_url") + urllib2.quote(endpoint) + params
 
 # returns an array of parens after gissues in filename
 def getFilenameParens():
